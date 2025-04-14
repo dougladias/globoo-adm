@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+      - worker-service
+      - benefits-service
+      - payroll-service
+      - document-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - JWT_SECRET=seu_segredo_jwt_aqui
+      - WORKER_SERVICE_URL=http://worker-service:3001
+      - BENEFITS_SERVICE_URL=http://benefits-service:3002
+      - PAYROLL_SERVICE_URL=http://payroll-service:3003
+      - DOCUMENT_SERVICE_URL=http://document-service:3004
+
+  worker-service:
+    build: ./worker-service
+    container_name: worker-service
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/worker-service?authSource=admin
+      - JWT_SECRET=seu_segredo_jwt_aqui
+
+  benefits-service:
+    build: ./benefits-service
+    container_name: benefits-service
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mongodb
+      - worker-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/benefits-service?authSource=admin
+      - JWT_SECRET=seu_segredo_jwt_aqui
+      - WORKER_SERVICE_URL=http://worker-service:3001
+
+  payroll-service:
+    build: ./payroll-service
+    container_name: payroll-service
+    ports:
+      - "3003:3003"
+    depends_on:
+      - mongodb
+      - worker-service
+      - benefits-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/payroll-service?authSource=admin
+      - JWT_SECRET=seu_segredo_jwt_aqui
+      - WORKER_SERVICE_URL=http://worker-service:3001
+      - BENEFITS_SERVICE_URL=http://benefits-service:3002
+
+  document-service:
+    build: ./document-service
+    container_name: document-service
+    ports:
+      - "3004:3004"
+    depends_on:
+      - mongodb
+      - worker-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/document-service?authSource=admin
+      - JWT_SECRET=seu_segredo_jwt_aqui
+      - WORKER_SERVICE_URL=http://worker-service:3001
+    volumes:
+      - ./document-service/public/uploads:/app/public/uploads
+
+volumes:
+  mongo-data:

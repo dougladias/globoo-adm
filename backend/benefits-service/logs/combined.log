@@ -1,0 +1,2 @@
+{"level":"info","message":"MongoDB Connected: globoo-crud-shard-00-00.exysg.mongodb.net","service":"benefits-service","timestamp":"2025-04-14 10:20:08"}
+{"level":"info","message":"Benefits service running in development mode on port 3002","service":"benefits-service","timestamp":"2025-04-14 10:20:08"}
