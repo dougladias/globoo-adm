@@ -3,14 +3,14 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-  "start": "node dist/app.js",
-  "dev": "nodemon --exec ts-node src/app.ts",
-  "build": "tsc",
-  "test": "jest",
-  "test:unit": "jest --testPathPattern=unit",
-  "test:integration": "jest --testPathPattern=integration",
-  "lint": "eslint . --ext .ts"
-},
+    "start": "node dist/app.js",
+    "dev": "nodemon --exec ts-node src/app.ts",
+    "build": "tsc",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=unit",
+    "test:integration": "jest --testPathPattern=integration",
+    "lint": "eslint . --ext .ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

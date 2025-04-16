@@ -1,12 +1,12 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from 'mongoose';
 
-// Interface for log entries
-interface IEntry {
+// Interface para registro de entrada/saída
+export interface IEntry {
   entryTime: Date;
   leaveTime?: Date;
 }
 
-// Interface for the Visitor document
+// Interface para o documento Visitor
 export interface IVisitor extends Document {
   name: string;
   rg: string;
@@ -14,110 +14,103 @@ export interface IVisitor extends Document {
   phone: string;
   email: string;
   address: string;
-  photo?: string; // Optional photo field
+  photo?: string; // URL ou caminho para a foto
   logs: IEntry[];
   createdAt: Date;
+  updatedAt: Date;
+  isCurrentlyIn: boolean; // Virtual
 }
 
-// Mongoose schema for Visitors
+// Schema do Visitor
 const VisitorSchema = new Schema<IVisitor>({
   name: { 
     type: String, 
-    required: true,
-    trim: true // Remove whitespace from beginning and end
+    required: [true, 'Nome é obrigatório'],
+    trim: true 
   },
   rg: { 
     type: String, 
-    required: true,
-    trim: true
+    required: [true, 'RG é obrigatório'],
+    trim: true 
   },
   cpf: { 
     type: String, 
-    required: true,
-    unique: true, // Ensure unique CPF
+    required: [true, 'CPF é obrigatório'],
+    unique: true,
     trim: true,
     validate: {
       validator: function(v: string) {
-        // Basic CPF validation (can be expanded)
+        // Validação básica de CPF (apenas dígitos)
         return /^\d{11}$/.test(v.replace(/[^\d]/g, ''));
       },
-      message: 'Invalid CPF format'
+      message: 'CPF inválido. Deve conter 11 dígitos numéricos.'
     }
   },
   phone: { 
     type: String, 
-    required: true,
-    trim: true,
-    validate: {
-      validator: function(v: string) {
-        // Basic phone number validation
-        return /^[1-9]{2}9?[0-9]{8}$/.test(v.replace(/[^\d]/g, ''));
-      },
-      message: 'Invalid phone number format'
-    }
+    required: [true, 'Telefone é obrigatório'],
+    trim: true 
   },
   email: { 
     type: String, 
-    required: true,
-    lowercase: true,
+    required: [true, 'Email é obrigatório'],
     trim: true,
+    lowercase: true,
     validate: {
       validator: function(v: string) {
-        // Basic email validation
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        // Validação básica de email
+        return /^\S+@\S+\.\S+$/.test(v);
       },
-      message: 'Invalid email format'
+      message: 'Formato de email inválido'
     }
   },
   address: { 
     type: String, 
-    required: true,
-    trim: true
+    required: [true, 'Endereço é obrigatório'],
+    trim: true 
   },
   photo: { 
-    type: String // Base64 encoded image
+    type: String,
+    trim: true
   },
   logs: [
     {
       entryTime: { 
         type: Date, 
         required: true,
-        default: Date.now
+        default: Date.now 
       },
       leaveTime: { 
         type: Date 
-      },
-    },
-  ],
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  }
+      }
+    }
+  ]
 }, {
-  // Additional schema options
-  timestamps: true, // Automatically manage createdAt and updatedAt
-  toJSON: { virtuals: true }, // Include virtual properties when converting to JSON
-  toObject: { virtuals: true } // Include virtual properties when converting to object
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes to improve query performance
-VisitorSchema.index({ cpf: 1 });
+// Índices para otimizar consultas
+VisitorSchema.index({ cpf: 1 }, { unique: true });
+VisitorSchema.index({ name: 'text', email: 'text' });
 VisitorSchema.index({ createdAt: -1 });
-VisitorSchema.index({ name: 'text', email: 'text' }); // Text search index
 
-// Virtual property to get the last log entry
-VisitorSchema.virtual('lastLog').get(function() {
-  return this.logs.length > 0 ? this.logs[this.logs.length - 1] : null;
+// Virtual para verificar se o visitante está nas dependências
+VisitorSchema.virtual('isCurrentlyIn').get(function(this: IVisitor) {
+  if (this.logs.length === 0) return false;
+  const lastLog = this.logs[this.logs.length - 1];
+  return lastLog.entryTime && !lastLog.leaveTime;
 });
 
-// Pre-save hook for additional validation or processing
+// Normalização de CPF antes de salvar
 VisitorSchema.pre('save', function(next) {
-  // Normalize CPF and phone number (remove non-digit characters)
-  if (this.cpf) this.cpf = this.cpf.replace(/[^\d]/g, '');
-  if (this.phone) this.phone = this.phone.replace(/[^\d]/g, '');
-  
+  if (this.isModified('cpf')) {
+    this.cpf = this.cpf.replace(/[^\d]/g, '');
+  }
   next();
 });
 
-// Create the model, avoiding model re-compilation
-export default mongoose.models.Visitor || mongoose.model<IVisitor>("Visitor", VisitorSchema);
+const Visitor = mongoose.model<IVisitor>('Visitor', VisitorSchema);
+
+export default Visitor;

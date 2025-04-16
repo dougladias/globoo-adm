@@ -1,147 +1,149 @@
 import Visitor, { IVisitor } from '../models/visitor.model';
-import { FilterQuery, UpdateQuery, SortOrder } from 'mongoose';
-import logger from '../utils/logger';
+import { CreateVisitorDto, UpdateVisitorDto } from '../types/visitor.types';
+import { AppError } from '../utils/error-handler';
+import mongoose from 'mongoose';
 
-class VisitorRepository {
-  async findAll(filter: FilterQuery<IVisitor> = {}, sort: { [key: string]: SortOrder } = { createdAt: -1 }): Promise<IVisitor[]> {
-    try {
-      return await Visitor.find(filter).sort(sort);
-    } catch (error) {
-      logger.error('Error finding visitors:', error);
-      throw error;
-    }
+export class VisitorRepository {
+  // Buscar todos os visitantes
+  async findAll(): Promise<IVisitor[]> {
+    return Visitor.find().sort({ name: 1 });
   }
 
-  async findById(id: string): Promise<IVisitor | null> {
-    try {
-      return await Visitor.findById(id);
-    } catch (error) {
-      logger.error(`Error finding visitor by id ${id}:`, error);
-      throw error;
+  // Buscar visitante por ID
+  async findById(id: string): Promise<IVisitor> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('ID de visitante inválido', 400);
     }
+    
+    const visitor = await Visitor.findById(id);
+    
+    if (!visitor) {
+      throw new AppError('Visitante não encontrado', 404);
+    }
+    
+    return visitor;
   }
 
+  // Buscar visitante por CPF
   async findByCpf(cpf: string): Promise<IVisitor | null> {
-    try {
-      return await Visitor.findOne({ cpf });
-    } catch (error) {
-      logger.error(`Error finding visitor by CPF ${cpf}:`, error);
-      throw error;
+    // Normalizar CPF (remover caracteres não numéricos)
+    const normalizedCpf = cpf.replace(/[^\d]/g, '');
+    return Visitor.findOne({ cpf: normalizedCpf });
+  }
+
+  // Criar novo visitante
+  async create(visitorData: CreateVisitorDto): Promise<IVisitor> {
+    const visitor = new Visitor(visitorData);
+    await visitor.save();
+    return visitor;
+  }
+
+  // Atualizar visitante
+  async update(id: string, visitorData: UpdateVisitorDto): Promise<IVisitor> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('ID de visitante inválido', 400);
+    }
+    
+    const visitor = await Visitor.findByIdAndUpdate(
+      id,
+      visitorData,
+      { new: true, runValidators: true }
+    );
+    
+    if (!visitor) {
+      throw new AppError('Visitante não encontrado', 404);
+    }
+    
+    return visitor;
+  }
+
+  // Excluir visitante
+  async delete(id: string): Promise<void> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('ID de visitante inválido', 400);
+    }
+    
+    const result = await Visitor.findByIdAndDelete(id);
+    
+    if (!result) {
+      throw new AppError('Visitante não encontrado', 404);
     }
   }
 
-  async create(visitorData: Partial<IVisitor>): Promise<IVisitor> {
-    try {
-      const visitor = new Visitor(visitorData);
-      return await visitor.save();
-    } catch (error) {
-      logger.error('Error creating visitor:', error);
-      throw error;
+  // Registrar entrada de visitante
+  async registerEntry(id: string): Promise<IVisitor> {
+    const visitor = await this.findById(id);
+    
+    // Verificar se há uma entrada sem saída
+    if (visitor.isCurrentlyIn) {
+      throw new AppError('Visitante já possui entrada registrada sem saída', 400);
     }
+    
+    // Adicionar novo registro de entrada
+    visitor.logs.push({ entryTime: new Date() });
+    await visitor.save();
+    
+    return visitor;
   }
 
-  async update(id: string, visitorData: UpdateQuery<IVisitor>): Promise<IVisitor | null> {
-    try {
-      return await Visitor.findByIdAndUpdate(
-        id,
-        visitorData,
-        { new: true, runValidators: true }
-      );
-    } catch (error) {
-      logger.error(`Error updating visitor ${id}:`, error);
-      throw error;
+  // Registrar saída de visitante
+  async registerExit(id: string): Promise<IVisitor> {
+    const visitor = await this.findById(id);
+    
+    if (!visitor.isCurrentlyIn) {
+      throw new AppError('Visitante não possui entrada registrada', 400);
     }
+    
+    // Atualizar último registro com a data de saída
+    const lastLog = visitor.logs[visitor.logs.length - 1];
+    lastLog.leaveTime = new Date();
+    
+    await visitor.save();
+    return visitor;
   }
 
-  async delete(id: string): Promise<IVisitor | null> {
-    try {
-      return await Visitor.findByIdAndDelete(id);
-    } catch (error) {
-      logger.error(`Error deleting visitor ${id}:`, error);
-      throw error;
-    }
-  }
-
-  async search(query: string): Promise<IVisitor[]> {
-    try {
-      return await Visitor.find({ $text: { $search: query } })
-        .sort({ score: { $meta: 'textScore' } });
-    } catch (error) {
-      logger.error(`Error searching visitors with query "${query}":`, error);
-      throw error;
-    }
-  }
-
-  async registerEntry(id: string): Promise<IVisitor | null> {
-    try {
-      return await Visitor.findByIdAndUpdate(
-        id,
-        { $push: { logs: { entryTime: new Date() } } },
-        { new: true }
-      );
-    } catch (error) {
-      logger.error(`Error registering entry for visitor ${id}:`, error);
-      throw error;
-    }
-  }
-
-  async registerExit(id: string): Promise<IVisitor | null> {
-    try {
-      const visitor = await Visitor.findById(id);
-      
-      if (!visitor || visitor.logs.length === 0) {
-        return null;
-      }
-      
-      // Atualizar o último log
-      const lastLogIndex = visitor.logs.length - 1;
-      if (visitor.logs[lastLogIndex].leaveTime) {
-        // O último log já tem saída registrada, criar novo log
-        visitor.logs.push({
-          entryTime: new Date(),
-          leaveTime: new Date()
-        });
-      } else {
-        // Atualizar a saída do último log
-        visitor.logs[lastLogIndex].leaveTime = new Date();
-      }
-      
-      await visitor.save();
-      return visitor;
-    } catch (error) {
-      logger.error(`Error registering exit for visitor ${id}:`, error);
-      throw error;
-    }
-  }
-
-  async getActiveVisitors(): Promise<IVisitor[]> {
-    try {
-      return await Visitor.find({
-        'logs': {
-          $elemMatch: {
-            'leaveTime': { $exists: false }
-          }
+  // Buscar visitantes ativos (sem registro de saída)
+  async findActive(): Promise<IVisitor[]> {
+    return Visitor.find({
+      logs: {
+        $elemMatch: {
+          entryTime: { $exists: true },
+          leaveTime: { $exists: false }
         }
-      });
-    } catch (error) {
-      logger.error('Error finding active visitors:', error);
-      throw error;
-    }
+      }
+    }).sort({ 'logs.entryTime': -1 });
   }
 
-  async getVisitorsForPeriod(startDate: Date, endDate: Date): Promise<IVisitor[]> {
-    try {
-      return await Visitor.find({
-        'logs.entryTime': {
-          $gte: startDate,
-          $lte: endDate
-        }
-      });
-    } catch (error) {
-      logger.error(`Error finding visitors for period ${startDate} to ${endDate}:`, error);
-      throw error;
+  // Buscar por período de data
+  async findByDateRange(startDate: Date, endDate: Date): Promise<IVisitor[]> {
+    return Visitor.find({
+      'logs.entryTime': {
+        $gte: startDate,
+        $lte: endDate
+      }
+    }).sort({ 'logs.entryTime': -1 });
+  }
+
+  // Buscar por termo (nome, CPF, email)
+  async search(term: string): Promise<IVisitor[]> {
+    const normalizedTerm = term.trim();
+    
+    // Se o termo parece um CPF, busca exata
+    const isCpf = /^\d{11}$/.test(normalizedTerm.replace(/[^\d]/g, ''));
+    
+    if (isCpf) {
+      const normalizedCpf = normalizedTerm.replace(/[^\d]/g, '');
+      const visitor = await Visitor.findOne({ cpf: normalizedCpf });
+      return visitor ? [visitor] : [];
     }
+    
+    // Caso contrário, busca por nome ou email
+    return Visitor.find({
+      $or: [
+        { name: { $regex: normalizedTerm, $options: 'i' } },
+        { email: { $regex: normalizedTerm, $options: 'i' } },
+        { rg: { $regex: normalizedTerm, $options: 'i' } }
+      ]
+    }).sort({ name: 1 });
   }
 }
-
-export default new VisitorRepository();

@@ -1,54 +1,39 @@
-import { Request, Response, NextFunction } from 'express';
-import logger from './logger';
-
-interface ApiError extends Error {
-  statusCode?: number;
-  errors?: any[];
-}
-
-export const errorHandler = (
-  err: ApiError,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const statusCode = err.statusCode || 500;
-  
-  // Log do erro
-  logger.error(`Error ${statusCode}: ${err.message}`, {
-    method: req.method,
-    path: req.path,
-    error: err,
-    stack: err.stack
-  });
-  
-  // Resposta para o cliente
-  res.status(statusCode).json({
-    status: 'error',
-    statusCode,
-    message: err.message,
-    errors: err.errors || undefined,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
-};
-
-// Cria um erro com status code
 export class AppError extends Error {
-  statusCode: number;
-  errors?: any[];
+  public readonly statusCode: number;
+  public readonly errors?: any; // Adiciona a propriedade opcional errors
 
-  constructor(message: string, statusCode = 400, errors?: any[]) {
+  constructor(message: string, statusCode: number, errors?: any) {
     super(message);
     this.statusCode = statusCode;
-    this.errors = errors;
-    
-    // Para que o instanceof funcione corretamente
+    this.errors = errors; // Atribui os erros
+
+    // Mantém o stack trace correto para erros personalizados (disponível no V8)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+
+    // Define o protótipo explicitamente.
     Object.setPrototypeOf(this, AppError.prototype);
   }
 }
 
-// Captura 404 para rotas não encontradas
-export const notFound = (req: Request, res: Response, next: NextFunction) => {
-  const error = new AppError(`Route not found - ${req.originalUrl}`, 404);
-  next(error);
+export const handleError = (err: any) => {
+  if (err.code === 11000) {
+    // MongoDB duplicate key error
+    const field = Object.keys(err.keyValue)[0];
+    return new AppError(`Já existe um cadastro com este ${field}`, 409);
+  }
+
+  if (err.name === 'ValidationError') {
+    // Mongoose validation error
+    const errors = Object.values(err.errors).map((val: any) => val.message);
+    return new AppError(`Dados inválidos: ${errors.join(', ')}`, 400);
+  }
+
+  if (err.name === 'CastError') {
+    // Mongoose cast error (e.g., invalid ID)
+    return new AppError(`ID inválido: ${err.value}`, 400);
+  }
+
+  return err;
 };

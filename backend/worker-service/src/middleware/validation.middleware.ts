@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { body, validationResult } from 'express-validator';
+import { body, validationResult } from "express-validator"
 import { AppError } from '../utils/error-handler';
 
 // Validação para criação/atualização de worker

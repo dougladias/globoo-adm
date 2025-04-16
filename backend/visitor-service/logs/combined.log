@@ -1,0 +1,3 @@
+2025-04-15 22:24:48 info: MongoDB Connected: globoo-crud-shard-00-01.exysg.mongodb.net {"service":"visitor-service"}
+2025-04-15 22:24:48 info: Servidor iniciado na porta 3005 - Ambiente: development {"service":"visitor-service"}
+2025-04-15 22:25:07 info: SIGINT recebido. Encerrando servidor... {"service":"visitor-service"}
