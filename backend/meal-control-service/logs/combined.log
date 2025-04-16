@@ -1,0 +1,3 @@
+{"level":"warn","message":"MongoDB disconnected","service":"meal-control-service","timestamp":"2025-04-16 08:31:45"}
+{"level":"info","message":"MongoDB Connected: globoo-crud-shard-00-02.exysg.mongodb.net","service":"meal-control-service","timestamp":"2025-04-16 08:35:34"}
+{"level":"info","message":"Meal Control service running in development mode on port 3006","service":"meal-control-service","timestamp":"2025-04-16 08:35:34"}
